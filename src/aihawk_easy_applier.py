@@ -7,7 +7,8 @@ import time
 import traceback
 from typing import List, Optional, Any, Tuple
 
-from httpx import HTTPStatusError
+# Original imports
+from httpx import HTTPStatusError # Potentially still useful if requests encounters similar errors
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
@@ -20,7 +21,7 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 
 import src.utils as utils
 from loguru import logger
-
+import requests # Now using requests for n8n API call
 
 class AIHawkEasyApplier:
     def __init__(self, driver: Any, resume_dir: Optional[str], set_old_answers: List[Tuple[str, str, str]],
@@ -327,7 +328,7 @@ class AIHawkEasyApplier:
 
         try:
             easy_apply_content = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, 'jobs-easy-apply-content'))
+                EC.presence_of_element_located((By.CLASS_NAME, 'jobs-easy-apply-form-section__grouping'))
             )
 
             pb4_elements = easy_apply_content.find_elements(By.CLASS_NAME, 'pb4')
@@ -421,7 +422,7 @@ class AIHawkEasyApplier:
         logger.debug("Finished handling upload fields")
 
     def _create_and_upload_resume(self, element, job):
-        logger.debug("Starting the process of creating and uploading resume.")
+        logger.debug("Starting the process of creating and uploading resume via n8n webhook.")
         folder_path = 'generated_cv'
 
         try:
@@ -432,49 +433,53 @@ class AIHawkEasyApplier:
             logger.error(f"Failed to create directory: {folder_path}. Error: {e}")
             raise
 
-        while True:
-            try:
-                timestamp = int(time.time())
-                file_path_pdf = os.path.join(folder_path, f"CV_{timestamp}.pdf")
-                logger.debug(f"Generated file path for resume: {file_path_pdf}")
+        timestamp = int(time.time())
+        file_path_pdf = os.path.join(folder_path, f"n8n_resume_{timestamp}.pdf")
+        
+        # Read Master Resume Content from master_resume.md in root
+        try:
+            resume_md_path = "master_resume.md"
+            if os.path.exists(resume_md_path):
+                with open(resume_md_path, 'r', encoding='utf-8') as f:
+                    master_resume_content = f.read()
+                logger.debug(f"Loaded master resume from {resume_md_path}")
+            else:
+                logger.error(f"master_resume.md not found at {os.path.abspath(resume_md_path)}")
+                raise FileNotFoundError("master_resume.md is missing")
+        except Exception as e:
+            logger.error(f"Error reading master resume: {e}")
+            raise
 
-                logger.debug(f"Generating resume for job: {job.title} at {job.company}")
-                resume_pdf_base64 = self.resume_generator_manager.pdf_base64(job_description_text=job.description)
-                with open(file_path_pdf, "xb") as f:
-                    f.write(base64.b64decode(resume_pdf_base64))
-                logger.debug(f"Resume successfully generated and saved to: {file_path_pdf}")
+        # Updated N8N Webhook URL
+        n8n_webhook_url = "https://n8n.tiancreates.com/webhook/15b02df0-e24b-4b9f-8cb3-43cf83d59cd7"
 
-                break
-            except HTTPStatusError as e:
-                if e.response.status_code == 429:
+        try:
+            logger.info(f"Sending generation request to n8n for job: {job.title}")
+            
+            payload = {
+                "masterResume": master_resume_content,
+                "jobDescription": job.description,
+                "cf_token": "" # Now that n8n endpoint is configured to bypass Turnstile, an empty token is fine
+            }
+            
+            # Send request
+            response = requests.post(n8n_webhook_url, json=payload, timeout=120)
+            
+            if response.status_code != 200:
+                logger.error(f"n8n returned status code {response.status_code}: {response.text}")
+                response.raise_for_status()
+            
+            # Save PDF
+            with open(file_path_pdf, "wb") as f:
+                f.write(response.content)
+                
+            logger.debug(f"Resume successfully generated via n8n and saved to: {file_path_pdf}")
 
-                    retry_after = e.response.headers.get('retry-after')
-                    retry_after_ms = e.response.headers.get('retry-after-ms')
-
-                    if retry_after:
-                        wait_time = int(retry_after)
-                        logger.warning(f"Rate limit exceeded, waiting {wait_time} seconds before retrying...")
-                    elif retry_after_ms:
-                        wait_time = int(retry_after_ms) / 1000.0
-                        logger.warning(f"Rate limit exceeded, waiting {wait_time} milliseconds before retrying...")
-                    else:
-                        wait_time = 20
-                        logger.warning(f"Rate limit exceeded, waiting {wait_time} seconds before retrying...")
-
-                    time.sleep(wait_time)
-                else:
-                    logger.error(f"HTTP error: {e}")
-                    raise
-
-            except Exception as e:
-                logger.error(f"Failed to generate resume: {e}")
-                tb_str = traceback.format_exc()
-                logger.error(f"Traceback: {tb_str}")
-                if "RateLimitError" in str(e):
-                    logger.warning("Rate limit error encountered, retrying...")
-                    time.sleep(20)
-                else:
-                    raise
+        except Exception as e:
+            logger.error(f"Failed to generate resume via n8n: {e}")
+            tb_str = traceback.format_exc()
+            logger.error(f"Traceback: {tb_str}")
+            raise
 
         file_size = os.path.getsize(file_path_pdf)
         max_file_size = 2 * 1024 * 1024  # 2 MB
