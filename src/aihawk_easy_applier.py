@@ -39,7 +39,7 @@ class AIHawkEasyApplier:
         logger.debug("AIHawkEasyApplier initialized successfully")
 
     def _load_questions_from_json(self) -> List[dict]:
-        output_file = 'answers.json'
+        output_file = 'data_folder/answers.json'
         logger.debug(f"Loading questions from JSON file: {output_file}")
         try:
             with open(output_file, 'r') as f:
@@ -823,7 +823,7 @@ class AIHawkEasyApplier:
         select.select_by_visible_text(text)
 
     def _save_questions_to_json(self, question_data: dict) -> None:
-        output_file = 'answers.json'
+        output_file = 'data_folder/answers.json'
         question_data['question'] = self._sanitize_text(question_data['question'])
         logger.debug(f"Saving question data to JSON: {question_data}")
         try:
@@ -839,6 +839,8 @@ class AIHawkEasyApplier:
             except FileNotFoundError:
                 logger.warning("JSON file not found, creating new file")
                 data = []
+            
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
             data.append(question_data)
             with open(output_file, 'w') as f:
                 json.dump(data, f, indent=4)
