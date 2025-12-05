@@ -6,7 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any
 from typing import Union
 
 import httpx
@@ -141,8 +141,8 @@ class LLMLogger:
     @staticmethod
     def log_request(prompts, parsed_reply: Dict[str, Dict]):
         logger.debug("Starting log_request method")
-        logger.debug(f"Prompts received: {prompts}")
-        logger.debug(f"Parsed reply received: {parsed_reply}")
+        logger.debug("Prompts received (content truncated)")
+        logger.debug("Parsed reply received (content truncated)")
 
         try:
             calls_log = os.path.join(
@@ -155,7 +155,7 @@ class LLMLogger:
         if isinstance(prompts, StringPromptValue):
             logger.debug("Prompts are of type StringPromptValue")
             prompts = prompts.text
-            logger.debug(f"Prompts converted to text: {prompts}")
+            logger.debug("Prompts converted to text (content truncated)")
         elif isinstance(prompts, Dict):
             logger.debug("Prompts are of type Dict")
             try:
@@ -163,7 +163,7 @@ class LLMLogger:
                     f"prompt_{i + 1}": prompt.content
                     for i, prompt in enumerate(prompts.messages)
                 }
-                logger.debug(f"Prompts converted to dictionary: {prompts}")
+                logger.debug("Prompts converted to dictionary (content truncated)")
             except Exception as e:
                 logger.error(f"Error converting prompts to dictionary: {str(e)}")
                 raise
@@ -174,7 +174,7 @@ class LLMLogger:
                     f"prompt_{i + 1}": prompt.content
                     for i, prompt in enumerate(prompts.messages)
                 }
-                logger.debug(f"Prompts converted to dictionary using default method: {prompts}")
+                logger.debug("Prompts converted to dictionary using default method (content truncated)")
             except Exception as e:
                 logger.error(f"Error converting prompts using default method: {str(e)}")
                 raise
@@ -224,7 +224,7 @@ class LLMLogger:
                 "output_tokens": output_tokens,
                 "total_cost": total_cost,
             }
-            logger.debug(f"Log entry created: {log_entry}")
+            logger.debug("Log entry created (content truncated)")
         except KeyError as e:
             logger.error(f"Error creating log entry: missing key {str(e)} in parsed_reply")
             raise
@@ -246,8 +246,26 @@ class LoggerChatModel:
         self.llm = llm
         logger.debug(f"LoggerChatModel successfully initialized with LLM: {llm}")
 
-    def __call__(self, messages: List[Dict[str, str]]) -> str:
-        logger.debug(f"Entering __call__ method with messages: {messages}")
+    def __call__(self, messages: Any) -> str:
+        # Truncate messages for logging to avoid excessive output
+        try:
+            if isinstance(messages, list) and len(messages) > 0 and isinstance(messages[0], dict):
+                 truncated_messages = [ 
+                    {k: (v[:100] + '...') if isinstance(v, str) and len(v) > 100 else v 
+                     for k, v in msg.items()} 
+                    for msg in messages 
+                ]
+            elif hasattr(messages, 'to_messages'): # PromptValue
+                 truncated_messages = [
+                     m.content[:100] + '...' if hasattr(m, 'content') and isinstance(m.content, str) and len(m.content) > 100 else str(m)[:100]
+                     for m in messages.to_messages()
+                 ]
+            else:
+                 truncated_messages = str(messages)[:500]
+        except Exception:
+            truncated_messages = "Could not truncate messages for logging"
+            
+        logger.debug(f"Entering __call__ method with messages (truncated): {truncated_messages}")
         while True:
             try:
                 logger.debug("Attempting to call the LLM with messages")
@@ -359,6 +377,7 @@ class GPTAnswerer:
     def __init__(self, config, llm_api_key):
         self.ai_adapter = AIAdapter(config, llm_api_key)
         self.llm_cheap = LoggerChatModel(self.ai_adapter)
+        self.resume_markdown = ""
 
     @property
     def job_description(self):
@@ -386,21 +405,23 @@ class GPTAnswerer:
         return textwrap.dedent(template)
 
     def set_resume(self, resume):
-        logger.debug(f"Setting resume: {resume}")
+        logger.debug("Setting resume (content truncated)")
         self.resume = resume
 
+    def set_resume_markdown(self, resume_markdown: str):
+        logger.debug("Setting resume markdown (content truncated)")
+        self.resume_markdown = resume_markdown
+
     def set_job(self, job):
-        logger.debug(f"Setting job: {job}")
+        logger.debug("Setting job (content truncated)")
         self.job = job
-        self.job.set_summarize_job_description(
-            self.summarize_job_description(self.job.description))
 
     def set_job_application_profile(self, job_application_profile):
-        logger.debug(f"Setting job application profile: {job_application_profile}")
+        logger.debug("Setting job application profile (content truncated)")
         self.job_application_profile = job_application_profile
 
     def summarize_job_description(self, text: str) -> str:
-        logger.debug(f"Summarizing job description: {text}")
+        logger.debug("Summarizing job description (content truncated)")
         strings.summarize_prompt_template = self._preprocess_template_string(
             strings.summarize_prompt_template
         )
@@ -408,31 +429,34 @@ class GPTAnswerer:
             strings.summarize_prompt_template)
         chain = prompt | self.llm_cheap | StrOutputParser()
         output = chain.invoke({"text": text})
-        logger.debug(f"Summary generated: {output}")
+        logger.debug("Summary generated (content truncated)")
         return output
 
     def _create_chain(self, template: str):
-        logger.debug(f"Creating chain with template: {template}")
+        logger.debug("Creating chain with template (content truncated)")
         prompt = ChatPromptTemplate.from_template(template)
         return prompt | self.llm_cheap | StrOutputParser()
 
     def answer_question_textual_wide_range(self, question: str) -> str:
         logger.debug(f"Answering textual question: {question}")
-        chains = {
-            "personal_information": self._create_chain(strings.personal_information_template),
-            "self_identification": self._create_chain(strings.self_identification_template),
-            "legal_authorization": self._create_chain(strings.legal_authorization_template),
-            "work_preferences": self._create_chain(strings.work_preferences_template),
-            "education_details": self._create_chain(strings.education_details_template),
-            "experience_details": self._create_chain(strings.experience_details_template),
-            "projects": self._create_chain(strings.projects_template),
-            "availability": self._create_chain(strings.availability_template),
-            "salary_expectations": self._create_chain(strings.salary_expectations_template),
-            "certifications": self._create_chain(strings.certifications_template),
-            "languages": self._create_chain(strings.languages_template),
-            "interests": self._create_chain(strings.interests_template),
-            "cover_letter": self._create_chain(strings.coverletter_template),
+        
+        # Map section names to template strings (lazy instantiation)
+        templates = {
+            "personal_information": strings.personal_information_template,
+            "self_identification": strings.self_identification_template,
+            "legal_authorization": strings.legal_authorization_template,
+            "work_preferences": strings.work_preferences_template,
+            "education_details": strings.education_details_template,
+            "experience_details": strings.experience_details_template,
+            "projects": strings.projects_template,
+            "availability": strings.availability_template,
+            "salary_expectations": strings.salary_expectations_template,
+            "certifications": strings.certifications_template,
+            "languages": strings.languages_template,
+            "interests": strings.interests_template,
+            "cover_letter": strings.coverletter_template,
         }
+        
         section_prompt = """You are assisting a bot designed to automatically apply for jobs on AIHawk. The bot receives various questions about job applications and needs to determine the most relevant section of the resume to provide an accurate response.
 
         For the following question: '{question}', determine which section of the resume is most relevant. 
@@ -503,18 +527,15 @@ class GPTAnswerer:
             - **Use When**: The question involves your certifications or qualifications from recognized organizations.
             - **Examples**: Certification names, issuing bodies, dates of validity.
 
-        11. **Languages**:
-            - **Purpose**: Describes the languages you can speak and your proficiency levels.
+        11. **Languages**:\n            - **Purpose**: Describes the languages you can speak and your proficiency levels.
             - **Use When**: The question asks about your language skills or proficiency in specific languages.
             - **Examples**: Languages spoken, proficiency levels.
 
-        12. **Interests**:
-            - **Purpose**: Details your personal or professional interests.
+        12. **Interests**:\n            - **Purpose**: Details your personal or professional interests.
             - **Use When**: The question is about your hobbies, interests, or activities outside of work.
             - **Examples**: Personal hobbies, professional interests.
 
-        13. **Cover Letter**:
-            - **Purpose**: Contains your personalized cover letter or statement.
+        13. **Cover Letter**:\n            - **Purpose**: Contains your personalized cover letter or statement.
             - **Use When**: The question involves your cover letter or specific written content intended for the job application.
             - **Examples**: Cover letter content, personalized statements.
 
@@ -534,23 +555,29 @@ class GPTAnswerer:
                 "Could not extract section name from the response.")
 
         section_name = match.group(1).lower().replace(" ", "_")
+        
+        template = templates.get(section_name)
+        if template is None:
+            logger.error(f"Template not defined for section '{section_name}'")
+            raise ValueError(f"Template not defined for section '{section_name}'")
+
+        # Create chain only for the identified section
+        chain = self._create_chain(template)
 
         if section_name == "cover_letter":
-            chain = chains.get(section_name)
+            resume_content = self.resume_markdown if self.resume_markdown else self.resume
             output = chain.invoke(
-                {"resume": self.resume, "job_description": self.job_description})
+                {"resume": resume_content, "job_description": self.job_description})
             logger.debug(f"Cover letter generated: {output}")
             return output
+            
         resume_section = getattr(self.resume, section_name, None) or getattr(self.job_application_profile, section_name,
                                                                              None)
         if resume_section is None:
             logger.error(
                 f"Section '{section_name}' not found in either resume or job_application_profile.")
             raise ValueError(f"Section '{section_name}' not found in either resume or job_application_profile.")
-        chain = chains.get(section_name)
-        if chain is None:
-            logger.error(f"Chain not defined for section '{section_name}'")
-            raise ValueError(f"Chain not defined for section '{section_name}'")
+        
         output = chain.invoke(
             {"resume_section": resume_section, "question": question})
         logger.debug(f"Question answered: {output}")
@@ -619,3 +646,24 @@ class GPTAnswerer:
             return "cover"
         else:
             return "resume"
+
+    def score_job_match(self, job_description: str) -> int:
+        logger.debug("Calculating job match score...")
+        
+        # Use Markdown resume if available, else fallback to structured resume object
+        resume_content = self.resume_markdown if self.resume_markdown else self.resume
+        logger.debug(f"Using resume content type: {type(resume_content)}")
+        
+        try:
+            template = self._preprocess_template_string(strings.job_scoring_template)
+            prompt = ChatPromptTemplate.from_template(template)
+            chain = prompt | self.llm_cheap | StrOutputParser()
+            output = chain.invoke({"job_description": job_description, "resume": resume_content})
+            logger.debug(f"Raw score output: {output}")
+            
+            score = self.extract_number_from_string(output)
+            logger.info(f"Job Match Score: {score}/100")
+            return score
+        except Exception as e:
+            logger.error(f"Failed to calculate job score: {e}")
+            return 100 # Default to 100 (apply) if scoring fails to be safe

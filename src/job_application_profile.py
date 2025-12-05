@@ -67,7 +67,7 @@ class JobApplicationProfile:
         logger.debug("Initializing JobApplicationProfile with provided YAML string")
         try:
             data = yaml.safe_load(yaml_str)
-            logger.debug(f"YAML data successfully parsed: {data}")
+            logger.debug("YAML data successfully parsed (content truncated)")
         except yaml.YAMLError as e:
             logger.error(f"Error parsing YAML file: {e}")
             raise ValueError("Error parsing YAML file.") from e
@@ -83,7 +83,7 @@ class JobApplicationProfile:
         try:
             logger.debug("Processing self_identification")
             self.self_identification = SelfIdentification(**data['self_identification'])
-            logger.debug(f"self_identification processed: {self.self_identification}")
+            logger.debug("self_identification processed")
         except KeyError as e:
             logger.error(f"Required field {e} is missing in self_identification data.")
             raise KeyError(f"Required field {e} is missing in self_identification data.") from e
@@ -101,7 +101,7 @@ class JobApplicationProfile:
         try:
             logger.debug("Processing legal_authorization")
             self.legal_authorization = LegalAuthorization(**data['legal_authorization'])
-            logger.debug(f"legal_authorization processed: {self.legal_authorization}")
+            logger.debug("legal_authorization processed")
         except KeyError as e:
             logger.error(f"Required field {e} is missing in legal_authorization data.")
             raise KeyError(f"Required field {e} is missing in legal_authorization data.") from e
@@ -119,7 +119,7 @@ class JobApplicationProfile:
         try:
             logger.debug("Processing work_preferences")
             self.work_preferences = WorkPreferences(**data['work_preferences'])
-            logger.debug(f"Work_preferences processed: {self.work_preferences}")
+            logger.debug("Work_preferences processed")
         except KeyError as e:
             logger.error(f"Required field {e} is missing in work_preferences data.")
             raise KeyError(f"Required field {e} is missing in work_preferences data.") from e
@@ -137,7 +137,7 @@ class JobApplicationProfile:
         try:
             logger.debug("Processing availability")
             self.availability = Availability(**data['availability'])
-            logger.debug(f"Availability processed: {self.availability}")
+            logger.debug("Availability processed")
         except KeyError as e:
             logger.error(f"Required field {e} is missing in availability data.")
             raise KeyError(f"Required field {e} is missing in availability data.") from e
@@ -155,7 +155,7 @@ class JobApplicationProfile:
         try:
             logger.debug("Processing salary_expectations")
             self.salary_expectations = SalaryExpectations(**data['salary_expectations'])
-            logger.debug(f"salary_expectations processed: {self.salary_expectations}")
+            logger.debug("salary_expectations processed")
         except KeyError as e:
             logger.error(f"Required field {e} is missing in salary_expectations data.")
             raise KeyError(f"Required field {e} is missing in salary_expectations data.") from e
@@ -182,5 +182,5 @@ class JobApplicationProfile:
                          f"Work Preferences:\n{format_dataclass(self.work_preferences)}\n\n"
                          f"Availability: {self.availability.notice_period}\n\n"
                          f"Salary Expectations: {self.salary_expectations.salary_range_usd}\n\n")
-        logger.debug(f"String representation generated: {formatted_str}")
+        logger.debug("String representation generated (content truncated)")
         return formatted_str

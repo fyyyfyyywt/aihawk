@@ -411,3 +411,24 @@ func_summarize_prompt_template = """
         {text_with_placeholders}
         
         ## Text without placeholders:"""
+
+job_scoring_template = """
+You are an expert HR recruiter. Your task is to evaluate the match between a candidate's resume and a job description.
+
+## Rules
+- Analyze the Job Description and the Resume.
+- Assign a score between 0 and 100.
+    - 0-30: Poor match (Missing key skills/experience).
+    - 31-69: Fair match (Some skills match, but gaps exist).
+    - 70-100: Good to Perfect match (Strong alignment with requirements).
+- You MUST return ONLY a single integer number.
+- Do not provide any explanation or text, just the number.
+
+## Job Description:
+{job_description}
+
+## Resume:
+{resume}
+
+## Score:
+"""

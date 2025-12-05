@@ -5,6 +5,10 @@ import sys
 import time
 
 from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from loguru import logger
 
 from app_config import MINIMUM_LOG_LEVEL
@@ -170,3 +174,20 @@ def printyellow(text):
 def stringWidth(text, font, font_size):
     bbox = font.getbbox(text)
     return bbox[2] - bbox[0]
+
+def wait_until_clickable(driver, by, value, timeout=10):
+    try:
+        return WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, value)))
+    except TimeoutException:
+        logger.warning(f"Element not clickable: {value}")
+        return None
+
+def wait_until_visible(driver, by, value, timeout=10):
+    try:
+        return WebDriverWait(driver, timeout).until(EC.visibility_of_element_located((by, value)))
+    except TimeoutException:
+        logger.warning(f"Element not visible: {value}")
+        return None
+
+def random_sleep(min_seconds, max_seconds):
+    time.sleep(random.uniform(min_seconds, max_seconds))

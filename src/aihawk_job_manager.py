@@ -12,7 +12,7 @@ from selenium.webdriver.common.by import By
 import src.utils as utils
 from app_config import MINIMUM_WAIT_TIME
 from src.job import Job
-from src.aihawk_easy_applier import AIHawkEasyApplier
+from src.aihawk_easy_applier import AIHawkEasyApplier, JobScoreTooLowException
 from loguru import logger
 
 
@@ -62,7 +62,25 @@ class AIHawkJobManager:
         self.resume_path = Path(resume_path) if resume_path and Path(resume_path).exists() else None
         self.output_file_directory = Path(parameters['outputFileDirectory'])
         self.env_config = EnvironmentKeys()
+        self._load_seen_jobs()
         logger.debug("Parameters set successfully")
+
+    def _load_seen_jobs(self):
+        logger.debug("Loading seen jobs from output files")
+        file_names = ["success.json", "failed.json", "skipped.json"]
+        for file_name in file_names:
+            file_path = self.output_file_directory / file_name
+            if file_path.exists():
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            for job in data:
+                                if 'link' in job:
+                                    self.seen_jobs.append(job['link'])
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"Failed to load seen jobs from {file_name}: {e}")
+        logger.debug(f"Loaded {len(self.seen_jobs)} seen jobs")
 
     def set_gpt_answerer(self, gpt_answerer):
         logger.debug("Setting GPT answerer")
@@ -82,7 +100,7 @@ class AIHawkJobManager:
         minimum_time = MINIMUM_WAIT_TIME
         minimum_page_time = time.time() + minimum_time
 
-        for position, location in searches:
+        for i, (position, location) in enumerate(searches):
             location_url = "&location=" + location
             job_page_number = -1
             logger.debug(f"Starting the search for {position} in {location}.")
@@ -93,8 +111,8 @@ class AIHawkJobManager:
                     job_page_number += 1
                     logger.debug(f"Going to job page {job_page_number}")
                     self.next_job_page(position, location_url, job_page_number)
-                    time.sleep(random.uniform(1.5, 3.5))
-                    logger.debug("Starting the application process for this page...")
+                    utils.wait_until_visible(self.driver, By.CSS_SELECTOR, "li[data-occludable-job-id]")
+                    logger.debug("Page loaded, starting the application process...")
 
                     try:
                         jobs = self.get_jobs_from_page()
@@ -149,6 +167,11 @@ class AIHawkJobManager:
                 logger.error(f"Unexpected error during job search: {e}")
                 continue
 
+            # Skip sleep if this is the last search
+            if i == len(searches) - 1:
+                logger.debug("Last search completed. Skipping final sleep.")
+                continue
+
             time_left = minimum_page_time - time.time()
 
             if time_left > 0:
@@ -194,12 +217,12 @@ class AIHawkJobManager:
             pass
 
         try:
-            job_results = self.driver.find_element(By.CLASS_NAME, "jobs-search-results-list")
+            job_results = self.driver.find_element(By.CLASS_NAME, "scaffold-layout__list")
             utils.scroll_slow(self.driver, job_results)
             utils.scroll_slow(self.driver, job_results, step=300, reverse=True)
 
-            job_list_elements = self.driver.find_elements(By.CLASS_NAME, 'scaffold-layout__list-container')[
-                0].find_elements(By.CLASS_NAME, 'jobs-search-results__list-item')
+            job_list_elements = self.driver.find_elements(By.CSS_SELECTOR, "li[data-occludable-job-id]")
+            logger.debug(f"Found {len(job_list_elements)} job list elements on the page.")
             if not job_list_elements:
                 logger.debug("No job class elements found on page, skipping.")
                 return []
@@ -215,6 +238,7 @@ class AIHawkJobManager:
             return []
 
     def apply_jobs(self):
+        logger.debug("Starting to apply for jobs on the current page.")
         try:
             no_jobs_element = self.driver.find_element(By.CLASS_NAME, 'jobs-search-two-pane__no-results-banner--expand')
             if 'No matching jobs found' in no_jobs_element.text or 'unfortunately, things aren' in self.driver.page_source.lower():
@@ -223,8 +247,7 @@ class AIHawkJobManager:
         except NoSuchElementException:
             pass
 
-        job_list_elements = self.driver.find_elements(By.CLASS_NAME, 'scaffold-layout__list-container')[
-            0].find_elements(By.CLASS_NAME, 'jobs-search-results__list-item')
+        job_list_elements = self.driver.find_elements(By.CSS_SELECTOR, "li[data-occludable-job-id]")
 
         if not job_list_elements:
             logger.debug("No job class elements found on page, skipping")
@@ -304,6 +327,9 @@ class AIHawkJobManager:
                     self.easy_applier_component.job_apply(job)
                     self.write_to_file(job, "success")
                     logger.debug(f"Applied to job: {job.title} at {job.company}")
+            except JobScoreTooLowException:
+                self.write_to_file(job, "skipped")
+                continue
             except Exception as e:
                 logger.error(f"Failed to apply for {job.title} at {job.company}: {e}")
                 self.write_to_file(job, "failed")
@@ -374,23 +400,38 @@ class AIHawkJobManager:
         logger.debug("Extracting job information from tile")
         job_title, company, job_location, apply_method, link = "", "", "", "", ""
         try:
-            print(job_tile.get_attribute('outerHTML'))
-            job_title = job_tile.find_element(By.CLASS_NAME, 'job-card-list__title').find_element(By.TAG_NAME, 'strong').text
+            # print(job_tile.get_attribute('outerHTML')) # Commented out to reduce noise
             
-            link = job_tile.find_element(By.CLASS_NAME, 'job-card-list__title').get_attribute('href').split('?')[0]
-            company = job_tile.find_element(By.CLASS_NAME, 'job-card-container__primary-description').text
+            # Title and Link
+            title_element = job_tile.find_element(By.CLASS_NAME, 'job-card-list__title--link')
+            job_title = title_element.text.strip().split('\n')[0] # Handle possible 'with verification' text
+            link = title_element.get_attribute('href').split('?')[0]
+            
+            # Company
+            company = job_tile.find_element(By.CLASS_NAME, 'artdeco-entity-lockup__subtitle').text.strip()
+            
             logger.debug(f"Job information extracted: {job_title} at {company}")
         except NoSuchElementException:
             logger.warning("Some job information (title, link, or company) is missing.")
+        
         try:
-            job_location = job_tile.find_element(By.CLASS_NAME, 'job-card-container__metadata-item').text
+            # Location
+            job_location = job_tile.find_element(By.CLASS_NAME, 'artdeco-entity-lockup__caption').text.strip()
         except NoSuchElementException:
             logger.warning("Job location is missing.")
+            
         try:
-            apply_method = job_tile.find_element(By.CLASS_NAME, 'job-card-container__apply-method').text
-        except NoSuchElementException:
+            # Check for Easy Apply using text content as the class name seems to be missing/changed
+            easy_apply_element = job_tile.find_elements(By.XPATH, ".//span[normalize-space(.)='Easy Apply']")
+            if easy_apply_element:
+                apply_method = "Easy Apply"
+                logger.debug("Easy Apply button found.")
+            else:
+                apply_method = "Applied"
+                logger.warning("Easy Apply not found, assuming 'Applied'.")
+        except Exception:
             apply_method = "Applied"
-            logger.warning("Apply method not found, assuming 'Applied'.")
+            logger.warning("Error checking for Easy Apply, assuming 'Applied'.")
 
         return job_title, company, job_location, link, apply_method
 

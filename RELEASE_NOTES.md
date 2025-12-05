@@ -1,6 +1,28 @@
 # AIHawk (local-resume-generator branch) - Release Notes
 
-## Version: v1.0.0-local-resume
+## Version: v1.0.6-refactor
+## Release Date: 2025-12-05
+
+---
+
+## 🚀 Key Features & Improvements
+
+### Code Refactoring & Optimization
+Major cleanup of the core application logic to improve maintainability and performance:
+*   **Modular Architecture**: Split the monolithic `AIHawkEasyApplier` into specific components:
+    *   `FormNavigator`: Handles page navigation and button detection.
+    *   `FormFiller`: Manages form interactions (text, radio, dropdowns, uploads).
+*   **Smart Wait Strategies**: Replaced unreliable static `time.sleep` with dynamic `WebDriverWait` (via new `wait_until_visible/clickable` utilities), significantly improving speed and stability.
+*   **Configuration Validation**: Extracted validation logic into a dedicated `src/config_validator.py`.
+
+### Documentation Organization
+*   **Cleaner Root Directory**: Moved specific guides (`GEMINI_SETUP_NOTES.md`, `LOCAL_RESUME_GENERATOR_GUIDE.md`) to `docs/guides/`.
+*   **Updated README**: Links updated to reflect the new structure.
+*   **Cleanup**: Removed redundant legacy files (`index_v11.html`, `generate_resume_test.py`).
+
+---
+
+## Version: v1.0.5-local-resume
 ## Release Date: 2025-12-02
 
 ---
@@ -10,9 +32,28 @@
 This branch introduces a significant change in how AIHawk generates resumes, replacing the default `lib_resume_builder_AIHawk` library's generation with a custom, API-driven approach.
 
 *   **Custom Resume Generation Integration**: AIHawk now integrates directly with a user-provided n8n webhook (or any compatible HTTP endpoint) to generate job-tailored PDF resumes. This allows developers to use their preferred resume generation backend, detached from AIHawk's internal LLM-based generation.
+    *   **Resume Generation Process**: The `master_resume.md` file acts as the primary content source. When a job application requires a resume, its description and the content of `master_resume.md` are sent to the configured n8n webhook. The n8n workflow is responsible for rendering the final, customized PDF, which is then saved in the `generated_cv/` directory and uploaded to the application form.
 *   **`master_resume.md` Support**: The system now reads the user's master resume content directly from `master_resume.md` (located in the project root) for submission to the custom generation service.
 *   **Gemini AI Model Support (inherited from `main` branch)**: Full compatibility and integration with Google Gemini models for other LLM-driven tasks (e.g., answering application questions), leveraging previous patches to the `lib_resume_builder_AIHawk` internal components.
 *   **Enhanced Testability**: A dedicated test script (`test_n8n_generation.py`) is provided to verify the custom resume generation API call independently.
+
+## ⚡ Improvements & Optimizations
+
+### v1.0.5
+*   **LLM Cost Optimization**: Refactored `_find_and_handle_textbox_question` to check if a form field is already filled (e.g., by LinkedIn's auto-fill) **before** querying the LLM. This prevents unnecessary API calls and speeds up the application process.
+*   **Robust Radio Button Handling**: Enhanced `_select_radio` to include a JavaScript click fallback. This resolves issues where radio buttons were identified but not successfully clicked (causing "Failed answering" errors), ensuring more reliable form submission.
+
+### v1.0.4
+*   **Intelligent Text Entry**: Updated the text input logic to check if a form field is already pre-filled with the correct information. The bot now skips clearing and re-typing if the existing content matches.
+*   **Lazy LLM Chain Creation**: Optimized `llm_manager.py` to instantiate LangChain processing chains only when a specific resume section is needed. This eliminates the overhead of creating 13+ unused chains for every single question.
+*   **Reduced Debug Output**: Significantly reduced the verbosity of debug logs and removed full prompt template printing.
+
+## 🐛 Bug Fixes
+
+*   **"Next/Submit" Button Interaction (v1.0.4)**: Fixed a critical `ElementNotInteractableException` where the bot failed to click the "Next" or "Submit" button on long forms. The fix involves scrolling the button into view and adding a JavaScript click fallback.
+*   **Incorrect Input Type Handling (v1.0.3)**: Modified `_find_and_handle_textbox_question` to explicitly filter out non-text input types (like `radio`, `checkbox`, `file`). This prevents the bot from attempting to input text or generate content for inappropriate form fields.
+*   **Form Element Detection (v1.0.1)**: Fixed issues where the bot failed to find form input fields due to DOM changes. The `fill_up` method now uses a robust multi-strategy approach to locate form sections.
+*   **Easy Apply Button Detection (v1.0.1)**: Improved the "Easy Apply" button detection logic to include ID-based searches and better text matching.
 
 ## 🔄 Differences from `main` Branch
 

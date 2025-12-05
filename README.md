@@ -647,6 +647,10 @@ To make **AIHawk** automatically start when your system boots, follow the steps 
 
 - [Download Auto-start AIHawk Guide (PDF)](https://github.com/feder-cr/Auto_Jobs_Applier_AIHawk/blob/main/docs/guide_to_autostart_aihawk.pdf)
 
+### Additional Guides
+- [Gemini Setup Notes](docs/guides/GEMINI_SETUP_NOTES.md)
+- [Local Resume Generator Guide](docs/guides/LOCAL_RESUME_GENERATOR_GUIDE.md)
+
 Navigate to the docs/ directory and download the PDF guides you need.
 
 Written by Rushi, [Linkedin](https://www.linkedin.com/in/rushichaganti/), support him by following.

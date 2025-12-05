@@ -85,27 +85,30 @@ class AIHawkAuthenticator:
         try:
             self.driver.get('https://www.linkedin.com/feed')
             logger.debug("Checking if user is logged in...")
+
+            try:
+                # Check for Global Navigation (loads instantly with the page)
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.ID, 'global-nav'))
+                )
+                # Double check URL to be sure
+                if 'feed' in self.driver.current_url:
+                    logger.info("Global navigation found and URL contains 'feed'. User is logged in.")
+                    return True
+            except TimeoutException:
+                pass
+
+            # Fallback: Check for "Start a post" button (Old method, just in case)
             WebDriverWait(self.driver, 3).until(
                 EC.presence_of_element_located((By.CLASS_NAME, 'share-box-feed-entry__trigger'))
             )
-
-            # Check for the presence of the "Start a post" button
+            
             buttons = self.driver.find_elements(By.CLASS_NAME, 'share-box-feed-entry__trigger')
-            logger.debug(f"Found {len(buttons)} 'Start a post' buttons")
-
-            for i, button in enumerate(buttons):
-                logger.debug(f"Button {i + 1} text: {button.text.strip()}")
-
             if any(button.text.strip().lower() == 'start a post' for button in buttons):
-                logger.info("Found 'Start a post' button indicating user is logged in.")
+                logger.info("Found 'Start a post' button. User is logged in.")
                 return True
 
-            profile_img_elements = self.driver.find_elements(By.XPATH, "//img[contains(@alt, 'Photo of')]")
-            if profile_img_elements:
-                logger.info("Profile image found. Assuming user is logged in.")
-                return True
-
-            logger.info("Did not find 'Start a post' button or profile image. User might not be logged in.")
+            logger.info("Did not find login indicators. User might not be logged in.")
             return False
 
         except TimeoutException:

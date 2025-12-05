@@ -8,7 +8,7 @@ from loguru import logger
 # Ensure src can be imported
 sys.path.append(os.getcwd())
 
-from src.aihawk_easy_applier import AIHawkEasyApplier
+from src.forms.form_filler import FormFiller
 
 # Mock classes
 class MockJob:
@@ -26,8 +26,8 @@ class MockElement:
     def send_keys(self, path):
         logger.info(f"MOCK ELEMENT: Uploading file from path: {path}")
 
-def test_n8n_api_generation(): # Renamed function
-    logger.info("Starting n8n API generation test...")
+def test_n8n_api_generation():
+    logger.info("Starting n8n API generation test for FormFiller...")
     
     # 1. Mock dependencies (no real driver needed)
     mock_driver = MagicMock() # Mock driver
@@ -35,16 +35,16 @@ def test_n8n_api_generation(): # Renamed function
     mock_resume_generator = MagicMock()
     
     try:
-        # 2. Initialize Applier
-        applier = AIHawkEasyApplier(mock_driver, None, [], mock_gpt_answerer, mock_resume_generator)
+        # 2. Initialize FormFiller directly
+        form_filler = FormFiller(mock_driver, mock_gpt_answerer, mock_resume_generator)
         
         # 3. Create mocks
         mock_element = MockElement()
         mock_job = MockJob()
         
-        # 4. Call the modified method
-        logger.info("Calling _create_and_upload_resume (which now calls n8n API)...")
-        applier._create_and_upload_resume(mock_element, mock_job)
+        # 4. Call the method
+        logger.info("Calling _create_and_upload_resume_n8n...")
+        form_filler._create_and_upload_resume_n8n(mock_element, mock_job)
         
         if mock_job.pdf_path and os.path.exists(mock_job.pdf_path):
             logger.success(f"Test passed! Resume generated and 'uploaded': {mock_job.pdf_path}")

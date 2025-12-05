@@ -32,16 +32,18 @@ class AIHawkBotFacade:
         self.state = AIHawkBotState()
         self.job_application_profile = None
         self.resume = None
+        self.resume_markdown = None
         self.email = None
         self.password = None
         self.parameters = None
 
-    def set_job_application_profile_and_resume(self, job_application_profile, resume):
+    def set_job_application_profile_and_resume(self, job_application_profile, resume, resume_markdown=None):
         logger.debug("Setting job application profile and resume")
         self._validate_non_empty(job_application_profile, "Job application profile")
         self._validate_non_empty(resume, "Resume")
         self.job_application_profile = job_application_profile
         self.resume = resume
+        self.resume_markdown = resume_markdown
         self.state.job_application_profile_set = True
         logger.debug("Job application profile and resume set successfully")
 
@@ -51,6 +53,8 @@ class AIHawkBotFacade:
         self._ensure_job_profile_and_resume_set()
         gpt_answerer_component.set_job_application_profile(self.job_application_profile)
         gpt_answerer_component.set_resume(self.resume)
+        if self.resume_markdown:
+            gpt_answerer_component.set_resume_markdown(self.resume_markdown)
         self.apply_component.set_gpt_answerer(gpt_answerer_component)
         self.apply_component.set_resume_generator_manager(resume_generator_manager)
         self.state.gpt_answerer_set = True

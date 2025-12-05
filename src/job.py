@@ -16,11 +16,11 @@ class Job:
     recruiter_link: str = ""
 
     def set_summarize_job_description(self, summarize_job_description):
-        logger.debug(f"Setting summarized job description: {summarize_job_description}")
+        logger.debug("Setting summarized job description (content truncated)")
         self.summarize_job_description = summarize_job_description
 
     def set_job_description(self, description):
-        logger.debug(f"Setting job description: {description}")
+        logger.debug("Setting job description (content truncated)")
         self.description = description
 
     def set_recruiter_link(self, recruiter_link):
@@ -44,5 +44,5 @@ class Job:
         {self.description or 'No description provided.'}
         """
         formatted_information = job_information.strip()
-        logger.debug(f"Formatted job information: {formatted_information}")
+        logger.debug("Formatted job information (content truncated)")
         return formatted_information
